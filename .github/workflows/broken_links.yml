@@ -15,7 +15,6 @@ jobs:
     timeout-minutes: 30
     permissions:
       contents: read
-      issues: write
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # ratchet:actions/checkout@v7.0.1
@@ -33,57 +32,16 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Create/Update Issue for Broken Links
-        if: steps.link_check.outputs.has_errors == 'true'
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # ratchet:actions/github-script@v9.0.0
-        with:
-          script: |
-            const fs = require('fs');
-            const issueBody = fs.readFileSync('broken_links_issue.md', 'utf8');
-
-            const issues = await github.rest.issues.listForRepo({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              state: 'open',
-              labels: 'broken-links',
-              per_page: 1
-            });
-
-            if (issues.data.length > 0) {
-              await github.rest.issues.update({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: issues.data[0].number,
-                body: issueBody
-              });
-            } else {
-              await github.rest.issues.create({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                title: 'Broken Links Detected',
-                body: issueBody,
-                labels: ['broken-links', 'bug']
-              });
-            }
-
-      - name: Close Issue if No Errors
-        if: steps.link_check.outputs.has_errors == 'false'
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # ratchet:actions/github-script@v9.0.0
-        with:
-          script: |
-            const issues = await github.rest.issues.listForRepo({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              state: 'open',
-              labels: 'broken-links',
-              per_page: 1
-            });
-            if (issues.data.length > 0) {
-              await github.rest.issues.update({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: issues.data[0].number,
-                state: 'closed',
-                state_reason: 'completed'
-              });
-            }
+      - name: Summarize broken-link findings
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "## Broken Links Report"
+            echo "Workflow: read-only. This job does not open, edit, or close GitHub issues."
+            if [ -s broken_links_issue.md ]; then
+              cat broken_links_issue.md
+            else
+              echo "No broken-link report was generated. Review the job logs for details."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
